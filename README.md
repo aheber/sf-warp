@@ -14,6 +14,8 @@ For Apex, this plugin **does not** use your local source code and does not need 
 sf plugins install sf-warp
 ```
 
+(depends on native compiled modules, tree-sitter and tree-sitter-sfapex, may need functional compilation tools on your system to install)
+
 ## Issues
 
 Please report any issues at https://github.com/aheber/sf-warp/issues

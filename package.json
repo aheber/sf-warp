@@ -1,7 +1,7 @@
 {
   "name": "sf-warp",
   "description": "Warp your code and see if your tests notice",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "dependencies": {
     "@oclif/core": "^1.16.3",
     "@salesforce/core": "^3.25.0",
@@ -84,7 +84,6 @@
     "postpack": "shx rm -f oclif.manifest.json",
     "posttest": "yarn lint",
     "prepack": "sf-prepack",
-    "postinstall": "yarn husky install",
     "pretest": "sf-compile-test",
     "test": "sf-test",
     "test:nuts": "nyc mocha \"**/*.nut.ts\" --slow 4500 --timeout 600000 --parallel",
