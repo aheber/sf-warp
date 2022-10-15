@@ -93,14 +93,17 @@ Warp an Apex class in the target org, run tests to see if they notice.
 
 ```
 USAGE
-  $ sf warp apex [--json] [-e <value>] [-c <value>] [-t <value>] [-o <value>] [-p <value>] [-a] [-v none|minimal|details|full]
+  $ sf warp apex [--json] [-e <value>] [-c <value>] [-t <value>] [-o <value>] [-p <value>] [-a] [-v
+    none|minimal|details|full]
 
 FLAGS
   -a, --analyze-only                           Don't modify the Apex, only report possible changes.
   -c, --class=<value>                          Class name to warp.
   -e, --username=<value>                       [default: test-pxjwqols06it@example.com]
   -o, --timeout=<value>                        [default: 120] Maximum seconds for each deployment or test execution
-  -p, --test-class-match-pattern=<value>...    [default: Test{classname},Test_{classname},{classname}_Test,{classname}Test] Fallback pattern to find supporting test classes.
+  -p, --test-class-match-pattern=<value>...    [default:
+                                               Test{classname},Test_{classname},{classname}_Test,{classname}Test]
+                                               Fallback pattern to find supporting test classes.
   -t, --test-class=<value>...                  Class name to use in testing.
   -v, --verbosity=(none|minimal|details|full)  [default: minimal] Set the output verbosity to control the text volume
 
@@ -112,8 +115,9 @@ DESCRIPTION
 
   For one or many Apex classes, warp one small aspect at a time and run tests against that variation.
 
-  If your tests notice the change and fail that is good, your tests proved that they are validating logic. If the test still passes then your tests didn't care about the logic change. That might indicate a
-  need for a better test, or it might indicate that the change would never matter and is a false-positive.
+  If your tests notice the change and fail that is good, your tests proved that they are validating logic. If the test
+  still passes then your tests didn't care about the logic change. That might indicate a need for a better test, or it
+  might indicate that the change would never matter and is a false-positive.
 
 EXAMPLES
   Execute against a class named "Utils"
@@ -131,7 +135,8 @@ EXAMPLES
 FLAG DESCRIPTIONS
   -p, --test-class-match-pattern=<value>...  Fallback pattern to find supporting test classes.
 
-    Specify a test pattern that will be used against available class names existing in the org. Matches that are test classes will be used to evaluate mutations.
+    Specify a test pattern that will be used against available class names existing in the org. Matches that are test
+    classes will be used to evaluate mutations.
 
     Available replacements are:
 
