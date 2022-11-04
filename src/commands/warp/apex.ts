@@ -28,6 +28,7 @@ export default class Apex extends SfCommand<any> {
     class: Flags.string({
       summary: messages.getMessage('flags.class.summary'),
       char: 'c',
+      multiple: true,
     }),
     'test-class': Flags.string({
       summary: messages.getMessage('flags.test-class.summary'),
@@ -42,7 +43,7 @@ export default class Apex extends SfCommand<any> {
     // }),
     timeout: Flags.integer({
       summary: messages.getMessage('flags.timeout.summary'),
-      char: 'o',
+      char: 'm',
       default: 120,
     }),
     'test-class-match-pattern': Flags.string({
@@ -50,7 +51,14 @@ export default class Apex extends SfCommand<any> {
       description: messages.getMessage('flags.test-class-match-pattern.description'),
       char: 'p',
       multiple: true,
-      default: ['Test{classname}', 'Test_{classname}', '{classname}_Test', '{classname}Test'],
+      default: [
+        'Test{classname}',
+        'Test_{classname}',
+        '{classname}Test',
+        '{classname}_Test',
+        '{classname}Tests',
+        '{classname}_Tests',
+      ],
     }),
     'analyze-only': Flags.boolean({
       summary: messages.getMessage('flags.analyze-only.summary'),
@@ -82,14 +90,14 @@ export default class Apex extends SfCommand<any> {
     return await new ApexWarper(connection, {
       analyzeOnly: flags['analyze-only'],
       timeoutMs: flags.timeout * 1000,
-      verbosity: flags.verbosity as Verbosity,
+      verbosity: (flags.json ? Verbosity.none : flags.verbosity) as Verbosity,
       testClassMatchPatterns: flags['test-class-match-pattern'],
-      classes: [
-        {
-          className: flags.class,
+      classes: flags.class.map((className) => {
+        return {
+          className,
           testClasses: flags['test-class'],
-        },
-      ],
+        };
+      }),
     }).executeWarpTests();
   }
 }
