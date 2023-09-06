@@ -1,55 +1,15 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import * as Parser from 'tree-sitter';
-import * as tsApex from 'tree-sitter-sfapex';
-
-interface TSLocation {
-  row: number;
-  column: number;
-}
-
-interface TSNode {
-  startPosition: TSLocation;
-  endPosition: TSLocation;
-}
-
-export interface TSCapture {
-  name: string;
-  node: TSNode;
-}
-interface TSQuery {
-  captures(TSTreeNode): TSCapture[];
-}
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
-interface TSLanguage {}
-// interface TSTree {
-//   soemthing();
-// }
-interface TSParser {
-  setLanguage(TSLanguage): void;
-  getLanguage(): TSLanguage;
-  parse(
-    input: string | Parser.Input | Parser.InputReader,
-    oldTree?: Parser.Tree,
-    options?: {
-      bufferSize?: number;
-      includedRanges?: Parser.Range[];
-    }
-  ): Parser.Tree;
-}
+import { getApexParser } from 'web-tree-sitter-sfapex';
+import { SyntaxNode } from 'web-tree-sitter';
 export interface Lines {
   [key: number]: string;
 }
 
 export async function isTestClass(classBody: string): Promise<boolean> {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
-  const parser = new Parser() as TSParser;
-  parser.setLanguage((await tsApex).apex);
+  const parser = await getApexParser();
 
   const tree = parser.parse(classBody);
-
-  const query = new Parser.Query(parser.getLanguage(), '(annotation name: (identifier) @annotationNames)') as TSQuery;
+  const query = parser.getLanguage().query('(annotation name: (identifier) @annotationNames)');
 
   const testCandidateCaptures = query.captures(tree.rootNode);
   const testLines = classBody.split('\n');
@@ -68,7 +28,7 @@ export async function isTestClass(classBody: string): Promise<boolean> {
   return isTest;
 }
 
-export function getTextParts(lines: Lines, node: TSNode): string[] {
+export function getTextParts(lines: Lines, node: SyntaxNode): string[] {
   // probably a smarter way to do this out there...
   const line = lines[node.startPosition.row];
   if (node.startPosition.row === node.endPosition.row) {

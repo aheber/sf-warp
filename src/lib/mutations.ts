@@ -1,6 +1,5 @@
-import { TSCapture } from './ts_tools';
-import { Lines } from './ts_tools';
-import { getTextParts } from './ts_tools';
+import { QueryCapture } from 'web-tree-sitter';
+import { getTextParts, Lines } from './ts_tools';
 
 export enum MUTANT_TYPES {
   ADDITION_SUBTRACT = 'addition_subtract',
@@ -22,7 +21,7 @@ export enum MUTANT_TYPES {
   RETURN_WITH_VALUE = 'return_with_value',
 }
 
-export function getMutatedParts(capture: TSCapture, text: Lines): string[] {
+export function getMutatedParts(capture: QueryCapture, text: Lines): string[] {
   // if start and end are on different lines, capture from start position to end of line,
   // then if needed, full lines, until finally 0 until end of capture
   const [start, capturedText, end] = getTextParts(text, capture.node);
@@ -30,7 +29,7 @@ export function getMutatedParts(capture: TSCapture, text: Lines): string[] {
 }
 
 // eslint-disable-next-line complexity
-export function getMutantValue(capture: TSCapture, text: string): string {
+export function getMutantValue(capture: QueryCapture, text: string): string {
   switch (capture.name) {
     case MUTANT_TYPES.ADDITION_SUBTRACT:
       return text === '+' ? '-' : '+';

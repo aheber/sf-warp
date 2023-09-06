@@ -1,21 +1,19 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable complexity */
 /* eslint-disable no-console */
 import * as fs from 'fs';
 import * as path from 'path';
 import * as process from 'node:process';
 import { Connection } from '@salesforce/core';
-import * as Parser from 'tree-sitter';
-import * as tsApex from 'tree-sitter-sfapex';
+import { getApexParser } from 'web-tree-sitter-sfapex';
+import { Query, QueryCapture, Tree } from 'web-tree-sitter';
 import { getApexClasses, executeTests, writeApexClassesToOrg, ApexClassRecord } from '../sf';
-import { getTextParts, Lines, isTestClass, TSCapture } from '../ts_tools';
+import { getTextParts, Lines, isTestClass } from '../ts_tools';
 import { getMutatedParts } from '../mutations';
 import { getPerfStart, getPerfDurationMs, getPerfDurationHumanReadable } from '../perf';
 
-const queries = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'tsQueries', 'apexCaptures.scm'));
+const queries = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'tsQueries', 'apexCaptures.scm'), 'utf-8');
+
+type Parser = Awaited<ReturnType<typeof getApexParser>>;
 
 export enum Verbosity {
   none = 'none',
@@ -43,6 +41,17 @@ interface Config {
   }>;
 }
 
+interface Mutant {
+  type: string;
+  startLine: number;
+  startPosition: number;
+  testResults;
+  status: string;
+  error: string;
+  deploymentDurationMs: number;
+  testExecuteDurationMs: number;
+}
+
 const isVerboseEnough = (val: Verbosity, minimumVerbosity: Verbosity): boolean => {
   return VerbosityVal[val] >= VerbosityVal[minimumVerbosity];
 };
@@ -60,11 +69,11 @@ export default class ApexWarper {
 
   private classMapByName: { [key: string]: ApexClassRecord } = {};
 
-  private mutants = {};
+  private mutants = new Map<string, Mutant[]>();
 
   private conn: Connection;
 
-  private parser;
+  private parser: Parser;
 
   private orgClassIsMutated = false;
   private unwindingPromise: Promise<void>;
@@ -74,9 +83,8 @@ export default class ApexWarper {
     this.config = { ...this.config, ...config };
   }
 
-  public async executeWarpTests(): Promise<any> {
-    this.parser = new Parser();
-    this.parser.setLanguage((await tsApex).apex);
+  public async executeWarpTests(): Promise<{ [k: string]: Mutant[] }> {
+    this.parser = await getApexParser();
     for (const classUnderTest of this.config.classes) {
       const totalExecutePerfName = getPerfStart();
       if (!classUnderTest.testClasses) {
@@ -115,10 +123,12 @@ export default class ApexWarper {
         console.log('Parsed in', getPerfDurationHumanReadable(parsePerfName));
       }
 
-      const query = new Parser.Query(this.parser.getLanguage(), queries);
+      const query = this.parser.getLanguage().query(queries);
 
       // TODO: Need to figure out how to block mutants inside of "ignore" sections
-      const captures = this.getCaptures(tree, query).filter((c) => !this.config.suppressedRuleNames.includes(c.name));
+      const captures = this.getCaptures(tree, query).filter(
+        (c) => !(this.config.suppressedRuleNames || []).includes(c.name)
+      );
 
       if (this.atLeastVerbosity(Verbosity.minimal)) {
         console.log(
@@ -127,10 +137,10 @@ export default class ApexWarper {
       }
       let mutantsKilled = 0;
       let count = 0;
-      this.mutants[className] = [];
+      this.mutants.set(className, []);
       for (const capture of captures) {
         let finalStatus = 'unknown';
-        let finalStatusMessage;
+        let finalStatusMessage: string;
         const perfName = getPerfStart();
 
         const oldLines: Lines = {};
@@ -138,8 +148,8 @@ export default class ApexWarper {
           oldLines[i] = lines[i];
           lines[i] = ''; // blank out the line so it is easier to inject replacements later
         }
-        let deployDuration;
-        let testPerfDuration;
+        let deployDuration: number;
+        let testPerfDuration: number;
         try {
           const textParts = getMutatedParts(capture, oldLines);
           if (this.atLeastVerbosity(Verbosity.details)) {
@@ -189,14 +199,19 @@ export default class ApexWarper {
             finalStatus = 'survived';
           }
         } catch (error) {
+          let errorMessage = 'Unknown Error';
           // TODO: if in minimal mode, buffer these and drop after all tests are done
           finalStatus = 'failure';
-          if (this.atLeastVerbosity(Verbosity.minimal)) {
-            console.log('Failure:', error.mesage || error);
+
+          if (error instanceof Error) {
+            errorMessage = error.message;
+            if (this.atLeastVerbosity(Verbosity.minimal)) {
+              console.log('Failure:', error.message || error);
+            }
           }
-          finalStatusMessage = error.message;
+          finalStatusMessage = errorMessage;
         }
-        this.mutants[className].push({
+        this.mutants.get(className).push({
           type: capture.name,
           startLine: capture.node.startPosition.row,
           startPosition: capture.node.startPosition.column,
@@ -230,13 +245,13 @@ export default class ApexWarper {
       await this.writeApexClassesToOrg(classUnderTest.className, originalClassText);
       this.orgClassIsMutated = false;
     }
-    return this.mutants;
+    return Object.fromEntries(this.mutants);
   }
 
-  private getCaptures(tree, query): TSCapture[] {
+  private getCaptures(tree: Tree, query: Query): QueryCapture[] {
     const queryPerfName = getPerfStart();
 
-    const captures = query.captures(tree.rootNode) as TSCapture[];
+    const captures = query.captures(tree.rootNode);
 
     if (this.atLeastVerbosity(Verbosity.full)) {
       console.log('Query executed in', getPerfDurationHumanReadable(queryPerfName));
@@ -244,7 +259,7 @@ export default class ApexWarper {
     return captures;
   }
 
-  private reportMutant(capture: TSCapture, oldText: Lines, newLineParts: string[]): void {
+  private reportMutant(capture: QueryCapture, oldText: Lines, newLineParts: string[]): void {
     // probably a smarter way to do this out there...
     const [start, middle, end] = getTextParts(oldText, capture.node);
     console.log(
@@ -284,13 +299,14 @@ export default class ApexWarper {
     return isVerboseEnough(this.config.verbosity, val);
   }
 
-  private async writeApexClassesToOrg(className: string, body: string): Promise<any> {
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+  private async writeApexClassesToOrg(className: string, body: string) {
     // If the system received a stop request and started unwinding, don't deploy again
     // will process exit as part of that promise so this is really just forcing a stop
     if (this.unwindingPromise !== undefined) {
       await this.unwindingPromise;
     }
-    return writeApexClassesToOrg(this.conn, this.classMapByName[className].Id, body, this.config.timeoutMs);
+    return writeApexClassesToOrg(this.conn, this.classMapByName[className].Id || '', body, this.config.timeoutMs);
   }
 
   private async usePatternsToGuessAtTestClasses(classUnderTest: {

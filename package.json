@@ -1,15 +1,14 @@
 {
   "name": "sf-warp",
   "description": "Warp your code and see if your tests notice",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "dependencies": {
     "@oclif/core": "^1.16.3",
     "@salesforce/core": "^3.25.0",
     "@salesforce/kit": "^1.5.45",
     "@salesforce/sf-plugins-core": "^1.14.1",
-    "tree-sitter": "^0.20.0",
-    "tree-sitter-sfapex": "^0.0.7",
-    "tslib": "^2"
+    "tslib": "^2",
+    "web-tree-sitter-sfapex": "^0.0.9"
   },
   "devDependencies": {
     "@oclif/test": "^2.1.1",
