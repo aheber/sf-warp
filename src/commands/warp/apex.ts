@@ -4,19 +4,7 @@ import { Messages } from '@salesforce/core';
 import ApexWarper, { Verbosity } from '../../lib/commands/apex';
 
 Messages.importMessagesDirectory(__dirname);
-const messages = Messages.load('sf-warp', 'warp.apex', [
-  'summary',
-  'description',
-  'examples',
-  'flags.analyze-only.summary',
-  'flags.class.summary',
-  // 'flags.file.summary',
-  'flags.test-class.summary',
-  'flags.timeout.summary',
-  'flags.test-class-match-pattern.summary',
-  'flags.test-class-match-pattern.description',
-  'flags.verbosity.summary',
-]);
+const messages = Messages.loadMessages('sf-warp', 'warp.apex');
 
 export default class Apex extends SfCommand<any> {
   public static readonly summary = messages.getMessage('summary');
