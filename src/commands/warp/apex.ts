@@ -18,6 +18,7 @@ export default class Apex extends SfCommand<any> {
       summary: messages.getMessage('flags.class.summary'),
       char: 'c',
       multiple: true,
+      required: true,
     }),
     'test-class': Flags.string({
       summary: messages.getMessage('flags.test-class.summary'),
@@ -83,7 +84,7 @@ export default class Apex extends SfCommand<any> {
       testClassMatchPatterns: flags['test-class-match-pattern'],
       classes: flags.class.map((className) => ({
         className,
-        testClasses: flags['test-class'],
+        testClasses: flags['test-class'] ?? [],
       })),
     }).executeWarpTests();
   }

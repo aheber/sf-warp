@@ -26,7 +26,7 @@ export async function getApexClasses(conn: Connection, classes: string[]): Promi
   const res = await conn.tooling.query<ApexClassRecord>(
     `SELECT Id, Name, Body FROM ApexClass WHERE Name IN (${classes
       .map((c) => `'${c}'`)
-      .join(',')}) AND ManageableState = 'unmanaged'`
+      .join(',')}) AND ManageableState = 'unmanaged'`,
   );
   return res.records;
 }
@@ -34,7 +34,7 @@ export async function getApexClasses(conn: Connection, classes: string[]): Promi
 export async function executeTests(
   conn: Connection,
   testClasses: string[],
-  timeoutMs: number
+  timeoutMs: number,
 ): Promise<ApexTestRunResultRecord> {
   const asyncJobId = await conn.tooling.runTestsAsynchronous({ classNames: testClasses.join(',') });
 
@@ -43,7 +43,7 @@ export async function executeTests(
     actionName: `TestClasses:${testClasses[0]}`,
     action: async () => {
       const request = await conn.tooling.query<ApexTestRunResultRecord>(
-        `SELECT Id, Status, TestTime, ClassesCompleted, ClassesEnqueued, EndTime, MethodsEnqueued, MethodsFailed FROM ApexTestRunResult WHERE AsyncApexJobId = '${asyncJobId}'`
+        `SELECT Id, Status, TestTime, ClassesCompleted, ClassesEnqueued, EndTime, MethodsEnqueued, MethodsFailed FROM ApexTestRunResult WHERE AsyncApexJobId = '${asyncJobId}'`,
       );
       if (!['Queued', 'Processing'].includes(request.records[0].Status)) {
         return request.records[0];
@@ -56,7 +56,7 @@ export async function writeApexClassesToOrg(
   conn: Connection,
   classId: string,
   body: string,
-  timeoutMs: number
+  timeoutMs: number,
 ): Promise<ContainerAsyncRequestRecord> {
   const mdContainer = await conn.tooling.create('MetadataContainer', {
     Name: 'WarpIt' + `${new Date().getTime()}`,
@@ -74,7 +74,7 @@ export async function writeApexClassesToOrg(
     timeout: timeoutMs,
     action: async () => {
       const request = await conn.tooling.query<ContainerAsyncRequestRecord>(
-        `SELECT Id, State, ErrorMsg, DeployDetails FROM ContainerAsyncRequest WHERE Id = '${requestSaveResult.id}'`
+        `SELECT Id, State, ErrorMsg, DeployDetails FROM ContainerAsyncRequest WHERE Id = '${requestSaveResult.id}'`,
       );
       if (!(request.records[0].State === 'Queued')) {
         return request.records[0];

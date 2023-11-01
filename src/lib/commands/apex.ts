@@ -1,7 +1,7 @@
 /* eslint-disable complexity */
 /* eslint-disable no-console */
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import * as process from 'node:process';
 import { Connection } from '@salesforce/core';
 import { getApexParser } from 'web-tree-sitter-sfapex';
@@ -47,14 +47,13 @@ interface Mutant {
   startPosition: number;
   testResults;
   status: string;
-  error: string;
-  deploymentDurationMs: number;
-  testExecuteDurationMs: number;
+  error?: string;
+  deploymentDurationMs?: number;
+  testExecuteDurationMs?: number;
 }
 
-const isVerboseEnough = (val: Verbosity, minimumVerbosity: Verbosity): boolean => {
-  return VerbosityVal[val] >= VerbosityVal[minimumVerbosity];
-};
+const isVerboseEnough = (val: Verbosity, minimumVerbosity: Verbosity): boolean =>
+  VerbosityVal[val] >= VerbosityVal[minimumVerbosity];
 
 export default class ApexWarper {
   // takes in configuration
@@ -87,18 +86,19 @@ export default class ApexWarper {
     this.parser = await getApexParser();
     for (const classUnderTest of this.config.classes) {
       const totalExecutePerfName = getPerfStart();
-      if (!classUnderTest.testClasses) {
-        classUnderTest.testClasses = [];
-      }
       // if no tests are specified, try and locate tests inside the org
+      const promises = [] as Array<ReturnType<typeof this.usePatternsToGuessAtTestClasses>>;
       if (!classUnderTest.testClasses || classUnderTest.testClasses.length === 0) {
-        await this.usePatternsToGuessAtTestClasses(classUnderTest);
+        promises.push(this.usePatternsToGuessAtTestClasses(classUnderTest));
       }
+      // eslint-disable-next-line no-await-in-loop
+      await Promise.all(promises);
 
       if (classUnderTest.testClasses.length === 0) {
         throw new Error('No test classes identified, unable to continue');
       }
       // run tests first to ensure they are valid and passing in the current config
+      // eslint-disable-next-line no-await-in-loop
       let testResults = await executeTests(this.conn, classUnderTest.testClasses, this.config.timeoutMs);
       if (testResults.MethodsFailed > 0) {
         throw new Error('Tests not passing before modifying target, unable to start warp');
@@ -107,6 +107,7 @@ export default class ApexWarper {
         console.log('All tests passing before warping target');
       }
       const className = classUnderTest.className;
+      // eslint-disable-next-line no-await-in-loop
       const classes = await getApexClasses(this.conn, [classUnderTest.className]);
       const parsePerfName = getPerfStart();
       for (const c of classes) {
@@ -127,20 +128,21 @@ export default class ApexWarper {
 
       // TODO: Need to figure out how to block mutants inside of "ignore" sections
       const captures = this.getCaptures(tree, query).filter(
-        (c) => !(this.config.suppressedRuleNames || []).includes(c.name)
+        (c) => !(this.config.suppressedRuleNames ?? []).includes(c.name),
       );
 
       if (this.atLeastVerbosity(Verbosity.minimal)) {
         console.log(
-          `Found ${captures.length} candidates in ${className}, testing with ${classUnderTest.testClasses.join(', ')}`
+          `Found ${captures.length} candidates in ${className}, testing with ${classUnderTest.testClasses.join(', ')}`,
         );
       }
       let mutantsKilled = 0;
       let count = 0;
-      this.mutants.set(className, []);
+      const mutantList: Mutant[] = [];
+      this.mutants.set(className, mutantList);
       for (const capture of captures) {
         let finalStatus = 'unknown';
-        let finalStatusMessage: string;
+        let finalStatusMessage: string | undefined;
         const perfName = getPerfStart();
 
         const oldLines: Lines = {};
@@ -148,12 +150,12 @@ export default class ApexWarper {
           oldLines[i] = lines[i];
           lines[i] = ''; // blank out the line so it is easier to inject replacements later
         }
-        let deployDuration: number;
-        let testPerfDuration: number;
+        let deployDuration: number | undefined;
+        let testPerfDuration: number | undefined;
         try {
           const textParts = getMutatedParts(capture, oldLines);
           if (this.atLeastVerbosity(Verbosity.details)) {
-            this.reportMutant(capture, oldLines, textParts);
+            reportMutant(capture, oldLines, textParts);
           }
           lines[capture.node.startPosition.row] = textParts.join('');
           // push the file to the org
@@ -161,6 +163,7 @@ export default class ApexWarper {
           this.orgClassIsMutated = true;
           const writePerfName = getPerfStart();
           if (!this.config.analyzeOnly) {
+            // eslint-disable-next-line no-await-in-loop
             await this.writeApexClassesToOrg(classUnderTest.className, lines.join('\n'));
           }
           deployDuration = getPerfDurationMs(writePerfName);
@@ -170,6 +173,7 @@ export default class ApexWarper {
           // capture the results against that mutant
           const testPerfName = getPerfStart();
           if (!this.config.analyzeOnly) {
+            // eslint-disable-next-line no-await-in-loop
             testResults = await executeTests(this.conn, classUnderTest.testClasses, this.config.timeoutMs);
           }
           testPerfDuration = getPerfDurationMs(testPerfName);
@@ -211,7 +215,7 @@ export default class ApexWarper {
           }
           finalStatusMessage = errorMessage;
         }
-        this.mutants.get(className).push({
+        mutantList.push({
           type: capture.name,
           startLine: capture.node.startPosition.row,
           startPosition: capture.node.startPosition.column,
@@ -237,11 +241,12 @@ export default class ApexWarper {
           `\nKilled ${mutantsKilled}/${count} (${(
             (mutantsKilled / count) *
             100
-          ).toFixed()}%) in ${getPerfDurationHumanReadable(totalExecutePerfName)}`
+          ).toFixed()}%) in ${getPerfDurationHumanReadable(totalExecutePerfName)}`,
         );
       }
       // put the class back the way we found it, what if they break the command??
       // probably best to try and capture the break command and fix the org code
+      // eslint-disable-next-line no-await-in-loop
       await this.writeApexClassesToOrg(classUnderTest.className, originalClassText);
       this.orgClassIsMutated = false;
     }
@@ -257,17 +262,6 @@ export default class ApexWarper {
       console.log('Query executed in', getPerfDurationHumanReadable(queryPerfName));
     }
     return captures;
-  }
-
-  private reportMutant(capture: QueryCapture, oldText: Lines, newLineParts: string[]): void {
-    // probably a smarter way to do this out there...
-    const [start, middle, end] = getTextParts(oldText, capture.node);
-    console.log(
-      `Start Line ${capture.node.startPosition.row} | ${capture.name}\n`,
-      `- ${start}\x1b[32m${middle}\x1b[0m${end}`,
-      '\n',
-      `+ ${newLineParts[0]}\x1b[31m${newLineParts[1]}\x1b[0m${newLineParts[2]}`
-    );
   }
 
   private subscribeToSignalToMaybeUnwind(className: string, originalClassText: string): void {
@@ -306,7 +300,7 @@ export default class ApexWarper {
     if (this.unwindingPromise !== undefined) {
       await this.unwindingPromise;
     }
-    return writeApexClassesToOrg(this.conn, this.classMapByName[className].Id || '', body, this.config.timeoutMs);
+    return writeApexClassesToOrg(this.conn, this.classMapByName[className].Id ?? '', body, this.config.timeoutMs);
   }
 
   private async usePatternsToGuessAtTestClasses(classUnderTest: {
@@ -319,10 +313,27 @@ export default class ApexWarper {
     }
 
     const testClassResults = await getApexClasses(this.conn, testClassCandidates);
+    const promises: Array<Promise<void>> = [];
     for (const r of testClassResults) {
-      if (await isTestClass(r.Body)) {
-        classUnderTest.testClasses.push(r.Name);
-      }
+      promises.push(
+        isTestClass(r.Body).then((res) => {
+          if (res) {
+            classUnderTest.testClasses.push(r.Name);
+          }
+        }),
+      );
     }
+    await Promise.all(promises);
   }
+}
+
+function reportMutant(capture: QueryCapture, oldText: Lines, newLineParts: string[]): void {
+  // probably a smarter way to do this out there...
+  const [start, middle, end] = getTextParts(oldText, capture.node);
+  console.log(
+    `Start Line ${capture.node.startPosition.row} | ${capture.name}\n`,
+    `- ${start}\x1b[32m${middle}\x1b[0m${end}`,
+    '\n',
+    `+ ${newLineParts[0]}\x1b[31m${newLineParts[1]}\x1b[0m${newLineParts[2]}`,
+  );
 }

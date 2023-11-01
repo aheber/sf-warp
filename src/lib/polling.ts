@@ -6,7 +6,7 @@ interface PollConfig {
   cancelAction?(): void;
 }
 
-const cancelledTimeouts = [];
+const cancelledTimeouts: NodeJS.Timeout[] = [];
 
 const MAX_POLL_MS = 3000;
 export function pollForResult<T>(pollConfig: PollConfig): Promise<T> {
@@ -15,7 +15,7 @@ export function pollForResult<T>(pollConfig: PollConfig): Promise<T> {
     timeoutId = setTimeout(() => {
       reject('Timeout polling action');
       cancelledTimeouts.push(timeoutId);
-    }, pollConfig.timeout || 30000);
+    }, pollConfig.timeout ?? 30000);
     void executePollAction<T>(pollConfig, resolve, reject, timeoutId);
   }).finally(() => clearTimeout(timeoutId)) as Promise<T>;
 }
@@ -26,7 +26,7 @@ function executePollAction<T>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   reject: (reason) => any,
   timeoutId: NodeJS.Timeout,
-  pollTime?: number
+  pollTime?: number,
 ): void {
   if (cancelledTimeouts.includes(timeoutId)) {
     if (pollConfig.cancelAction) {
@@ -34,9 +34,9 @@ function executePollAction<T>(
     }
     return;
   }
-  const waitTime = pollTime || pollConfig.initialWaitMs || 1000;
+  const waitTime = pollTime ?? pollConfig.initialWaitMs ?? 1000;
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
-  setTimeout(async function () {
+  setTimeout(async () => {
     let output;
     try {
       output = (await pollConfig.action.call(null)) as T;
