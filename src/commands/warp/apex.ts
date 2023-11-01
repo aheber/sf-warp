@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
+// eslint-disable-next-line no-restricted-imports
 import ApexWarper, { Verbosity } from '../../lib/commands/apex';
 
 Messages.importMessagesDirectory(__dirname);
@@ -11,7 +12,7 @@ export default class Apex extends SfCommand<any> {
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
 
-  public static flags = {
+  public static readonly flags = {
     username: Flags.requiredOrg(),
     class: Flags.string({
       summary: messages.getMessage('flags.class.summary'),
@@ -52,7 +53,7 @@ export default class Apex extends SfCommand<any> {
       summary: messages.getMessage('flags.analyze-only.summary'),
       char: 'a',
     }),
-    verbosity: Flags.enum({
+    verbosity: Flags.string({
       summary: messages.getMessage('flags.verbosity.summary'),
       char: 'v',
       options: Object.keys(Verbosity),
@@ -75,17 +76,15 @@ export default class Apex extends SfCommand<any> {
     // Probably has to be configurable
     // if we have class files, consume those files and build up the list of classes to test
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-    return await new ApexWarper(connection, {
+    return new ApexWarper(connection, {
       analyzeOnly: flags['analyze-only'],
       timeoutMs: flags.timeout * 1000,
       verbosity: (flags.json ? Verbosity.none : flags.verbosity) as Verbosity,
       testClassMatchPatterns: flags['test-class-match-pattern'],
-      classes: flags.class.map((className) => {
-        return {
-          className,
-          testClasses: flags['test-class'],
-        };
-      }),
+      classes: flags.class.map((className) => ({
+        className,
+        testClasses: flags['test-class'],
+      })),
     }).executeWarpTests();
   }
 }
