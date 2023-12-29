@@ -2,7 +2,6 @@
 /* eslint-disable no-console */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as process from 'node:process';
 import { Connection } from '@salesforce/core';
 import { getApexParser } from 'web-tree-sitter-sfapex';
 import { Query, QueryCapture, Tree } from 'web-tree-sitter';
@@ -160,9 +159,9 @@ export default class ApexWarper {
           lines[capture.node.startPosition.row] = textParts.join('');
           // push the file to the org
           // TODO: capture compile errors/failures and report that status
-          this.orgClassIsMutated = true;
           const writePerfName = getPerfStart();
           if (!this.config.analyzeOnly) {
+            this.orgClassIsMutated = true;
             // eslint-disable-next-line no-await-in-loop
             await this.writeApexClassesToOrg(classUnderTest.className, lines.join('\n'));
           }
@@ -246,8 +245,10 @@ export default class ApexWarper {
       }
       // put the class back the way we found it, what if they break the command??
       // probably best to try and capture the break command and fix the org code
-      // eslint-disable-next-line no-await-in-loop
-      await this.writeApexClassesToOrg(classUnderTest.className, originalClassText);
+      if (this.orgClassIsMutated) {
+        // eslint-disable-next-line no-await-in-loop
+        await this.writeApexClassesToOrg(classUnderTest.className, originalClassText);
+      }
       this.orgClassIsMutated = false;
     }
     return Object.fromEntries(this.mutants);
@@ -284,7 +285,6 @@ export default class ApexWarper {
         process.exit(101);
       }
     };
-
     process.on('SIGTERM', handle);
     process.on('SIGINT', handle);
   }
