@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
+// eslint-disable-next-line import/no-extraneous-dependencies
 import { QueryCapture } from 'web-tree-sitter';
 import { getTextParts, Lines } from './ts_tools';
 

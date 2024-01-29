@@ -3,7 +3,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Connection } from '@salesforce/core';
+import { ux } from '@oclif/core';
 import { getApexParser } from 'web-tree-sitter-sfapex';
+// eslint-disable-next-line import/no-extraneous-dependencies
 import { Query, QueryCapture, Tree } from 'web-tree-sitter';
 import { getApexClasses, executeTests, writeApexClassesToOrg, ApexClassRecord } from '../sf';
 import { getTextParts, Lines, isTestClass } from '../ts_tools';
@@ -96,7 +98,12 @@ export default class ApexWarper {
       if (classUnderTest.testClasses.length === 0) {
         throw new Error('No test classes identified, unable to continue');
       }
+
       // run tests first to ensure they are valid and passing in the current config
+
+      if (this.atLeastVerbosity(Verbosity.full)) {
+        ux.action.start('Executing tests before making changes');
+      }
       // eslint-disable-next-line no-await-in-loop
       let testResults = await executeTests(this.conn, classUnderTest.testClasses, this.config.timeoutMs);
       if (testResults.MethodsFailed > 0) {
@@ -126,10 +133,17 @@ export default class ApexWarper {
       const query = this.parser.getLanguage().query(queries);
 
       // TODO: Need to figure out how to block mutants inside of "ignore" sections
-      const captures = this.getCaptures(tree, query).filter(
-        (c) => !(this.config.suppressedRuleNames ?? []).includes(c.name),
-      );
-
+      const captures = this.getCaptures(tree, query)
+        .filter((c) => !(this.config.suppressedRuleNames ?? []).includes(c.name))
+        .filter((c) => {
+          const oldLines: Lines = {};
+          for (let i = c.node.startPosition.row; i <= c.node.endPosition.row; i++) {
+            oldLines[i] = lines[i];
+          }
+          const textParts = getMutatedParts(c, oldLines);
+          // filter out changes where our mutation has no effect
+          return Object.values(oldLines).join('\n') !== textParts.join('');
+        });
       if (this.atLeastVerbosity(Verbosity.minimal)) {
         console.log(
           `Found ${captures.length} candidates in ${className}, testing with ${classUnderTest.testClasses.join(', ')}`,
@@ -140,6 +154,9 @@ export default class ApexWarper {
       const mutantList: Mutant[] = [];
       this.mutants.set(className, mutantList);
       for (const capture of captures) {
+        if (this.atLeastVerbosity(Verbosity.full)) {
+          ux.action.start(`Build Mutant  (${count + 1}/${captures.length})`);
+        }
         let finalStatus = 'unknown';
         let finalStatusMessage: string | undefined;
         const perfName = getPerfStart();
@@ -161,6 +178,9 @@ export default class ApexWarper {
           // TODO: capture compile errors/failures and report that status
           const writePerfName = getPerfStart();
           if (!this.config.analyzeOnly) {
+            if (this.atLeastVerbosity(Verbosity.full)) {
+              ux.action.start(`Deploying Mutant (${count + 1}/${captures.length})`);
+            }
             this.orgClassIsMutated = true;
             // eslint-disable-next-line no-await-in-loop
             await this.writeApexClassesToOrg(classUnderTest.className, lines.join('\n'));
@@ -172,6 +192,9 @@ export default class ApexWarper {
           // capture the results against that mutant
           const testPerfName = getPerfStart();
           if (!this.config.analyzeOnly) {
+            if (this.atLeastVerbosity(Verbosity.full)) {
+              ux.action.start(`Executing Tests (${count + 1}/${captures.length})`);
+            }
             // eslint-disable-next-line no-await-in-loop
             testResults = await executeTests(this.conn, classUnderTest.testClasses, this.config.timeoutMs);
           }
@@ -236,8 +259,9 @@ export default class ApexWarper {
       }
 
       if (this.atLeastVerbosity(Verbosity.minimal)) {
-        console.log(
-          `\nKilled ${mutantsKilled}/${count} (${(
+        ux.action.start('\n');
+        ux.action.stop(
+          `\rKilled ${mutantsKilled}/${count} (${(
             (mutantsKilled / count) *
             100
           ).toFixed()}%) in ${getPerfDurationHumanReadable(totalExecutePerfName)}`,
@@ -331,7 +355,7 @@ function reportMutant(capture: QueryCapture, oldText: Lines, newLineParts: strin
   // probably a smarter way to do this out there...
   const [start, middle, end] = getTextParts(oldText, capture.node);
   console.log(
-    `Start Line ${capture.node.startPosition.row} | ${capture.name}\n`,
+    `\nStart Line ${capture.node.startPosition.row} | ${capture.name}\n`,
     `- ${start}\x1b[32m${middle}\x1b[0m${end}`,
     '\n',
     `+ ${newLineParts[0]}\x1b[31m${newLineParts[1]}\x1b[0m${newLineParts[2]}`,

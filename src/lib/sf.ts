@@ -1,4 +1,5 @@
 import { Connection } from '@salesforce/core';
+// eslint-disable-next-line import/no-extraneous-dependencies
 import { Record } from 'jsforce';
 import { pollForResult } from './polling';
 

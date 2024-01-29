@@ -1,4 +1,5 @@
 import { getApexParser } from 'web-tree-sitter-sfapex';
+// eslint-disable-next-line import/no-extraneous-dependencies
 import { SyntaxNode } from 'web-tree-sitter';
 export interface Lines {
   [key: number]: string;
