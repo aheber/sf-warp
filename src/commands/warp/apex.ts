@@ -1,3 +1,4 @@
+/* eslint-disable sf-plugin/flag-summary */ // had problems with 'target-org' flag an couldn't escape only that line
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
