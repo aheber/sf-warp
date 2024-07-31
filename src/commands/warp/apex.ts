@@ -13,7 +13,7 @@ export default class Apex extends SfCommand<any> {
   public static readonly examples = messages.getMessages('examples');
 
   public static readonly flags = {
-    username: Flags.requiredOrg(),
+    'target-org': Flags.requiredOrg({ aliases: ['username'], deprecateAliases: true }),
     class: Flags.string({
       summary: messages.getMessage('flags.class.summary'),
       char: 'c',
@@ -66,12 +66,8 @@ export default class Apex extends SfCommand<any> {
   public async run(): Promise<any> {
     const { flags } = await this.parse(Apex);
 
-    // this.log(`Connecting to ${flags.username}...`);
-
-    // Initialize the authorization for the provided username
-
     // Create a connection to the org
-    const connection = flags.username.getConnection();
+    const connection = flags['target-org'].getConnection();
 
     // TODO: when do we fail with a non-zero exit code?
     // Probably has to be configurable
