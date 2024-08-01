@@ -1,6 +1,5 @@
 import { Connection } from '@salesforce/core';
-// eslint-disable-next-line import/no-extraneous-dependencies
-import { Record } from 'jsforce';
+import type { Record, Schema, SObjectUpdateRecord } from 'jsforce';
 import { pollForResult } from './polling';
 
 interface ApexTestRunResultRecord extends Record {
@@ -11,6 +10,10 @@ interface ApexTestRunResultRecord extends Record {
   EndTime: number;
   MethodsEnqueued: number;
   MethodsFailed: number;
+}
+
+interface ApexTestQueueItem extends Record {
+  Status: string;
 }
 
 interface ContainerAsyncRequestRecord extends Record {
@@ -37,7 +40,7 @@ export async function executeTests(
   testClasses: string[],
   timeoutMs: number,
 ): Promise<ApexTestRunResultRecord> {
-  const asyncJobId = await conn.tooling.runTestsAsynchronous({ classNames: testClasses.join(',') });
+  const asyncJobId = await conn.tooling.runTestsAsynchronous({ classNames: testClasses.join(','), maxFailedTests: 0 });
 
   return pollForResult({
     timeout: timeoutMs,
@@ -48,6 +51,19 @@ export async function executeTests(
       );
       if (!['Queued', 'Processing'].includes(request.records[0].Status)) {
         return request.records[0];
+      }
+    },
+    cancelAction: async () => {
+      const queryResults = await conn.query<ApexTestQueueItem>(
+        `SELECT Id, Status FROM ApexTestQueueItem WHERE ParentJobId = '${asyncJobId}'`,
+      );
+      queryResults.records.forEach((record) => (record.Status = 'Aborted'));
+      const saveResult = await conn.update(
+        'ApexTestQueueItem',
+        queryResults.records as Array<SObjectUpdateRecord<Schema, 'ApexTestQueueItem'>>,
+      );
+      if (saveResult.find((res) => res.success === false) === undefined) {
+        throw new Error('Failure to cancel tests:' + JSON.stringify(saveResult));
       }
     },
   });

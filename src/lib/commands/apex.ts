@@ -231,7 +231,13 @@ export default class ApexWarper {
 
           if (error instanceof Error) {
             errorMessage = error.message;
-            if (this.atLeastVerbosity(Verbosity.minimal)) {
+            if (error.message === 'Timeout polling action') {
+              if (this.config.verbosity === Verbosity.minimal) {
+                process.stdout.write('⏰');
+              } else if (this.atLeastVerbosity(Verbosity.details)) {
+                console.log('Test Timed Out ⏰');
+              }
+            } else if (this.atLeastVerbosity(Verbosity.minimal)) {
               console.log('Failure:', error.message || error);
             }
           }

@@ -1,7 +1,7 @@
 {
   "name": "sf-warp",
   "description": "Warp your code and see if your tests notice",
-  "version": "0.0.14",
+  "version": "0.0.15",
   "dependencies": {
     "@oclif/core": "^3.15.1",
     "@salesforce/core": "^6.4.2",

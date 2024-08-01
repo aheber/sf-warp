@@ -3,7 +3,7 @@ interface PollConfig {
   timeout?: number;
   actionName: string;
   action(): unknown;
-  cancelAction?(): void;
+  cancelAction?(): void | Promise<void>;
 }
 
 const cancelledTimeouts: NodeJS.Timeout[] = [];
@@ -13,7 +13,17 @@ export function pollForResult<T>(pollConfig: PollConfig): Promise<T> {
   let timeoutId: NodeJS.Timeout;
   return new Promise((resolve, reject): void => {
     timeoutId = setTimeout(() => {
-      reject('Timeout polling action');
+      let cancelPromise: Promise<void> | undefined;
+      if (pollConfig.cancelAction) {
+        cancelPromise = (pollConfig.cancelAction.call(null) as Promise<void>).catch(reject);
+      }
+      if (cancelPromise) {
+        void cancelPromise.finally(() => {
+          reject(new Error('Timeout polling action'));
+        });
+      } else {
+        reject(new Error('Timeout polling action'));
+      }
       cancelledTimeouts.push(timeoutId);
     }, pollConfig.timeout ?? 30000);
     void executePollAction<T>(pollConfig, resolve, reject, timeoutId);
@@ -29,9 +39,6 @@ function executePollAction<T>(
   pollTime?: number,
 ): void {
   if (cancelledTimeouts.includes(timeoutId)) {
-    if (pollConfig.cancelAction) {
-      pollConfig.cancelAction.call(null);
-    }
     return;
   }
   const waitTime = pollTime ?? pollConfig.initialWaitMs ?? 1000;
